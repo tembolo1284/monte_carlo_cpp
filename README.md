@@ -46,6 +46,8 @@ Then execute:
 
 The CMake files allow easily switching between `g++` and `clang++`.
 
+# cmake -DUSE_CLANG=ON -B build.. to turn on clang
+# cmake -DUSE_CLANG=OFF -B build.. to turn off clang
 
 ## TODO
 
@@ -53,7 +55,5 @@ Some ideas for future improvements:
 
 - Add more finite difference schemes
 - Support early exercise features  
-- Add variance reduction techniques
+- Add variance reduction techniques to the monte carlo
 - Improve computational performance
-
-Let me know if you would like me to modify or expand the README file further.
