@@ -1,66 +1,101 @@
 #ifndef CentralHub_HPP
 #define CentralHub_HPP
-//monte carlo central hub coordinator
+
 #include <memory>
 #include <vector>
-//#include "SDEAbstract.hpp"
-//#include "SDEGBM.hpp"
+#include <iostream>
 #include "SDEGeneral.hpp"
 #include "Pricer.hpp"
 #include "FDMType.hpp"
-#include "FDMEuler.hpp"
-//#include "RandNumGen.hpp"
 #include "MTEngRandNumGen.hpp"
-
 
 template<typename SDEGeneral, typename Pricer, typename FDMType, typename MTEngRandNumGen>
 class MCCentralHub {
-
 private:
     std::shared_ptr<SDEGeneral> sde;
     std::shared_ptr<Pricer> pricer;
     std::shared_ptr<FDMType> fdm;
     std::shared_ptr<MTEngRandNumGen> randGen;
-
     int NumSim;
+    int PathSize;
     std::vector<double> path;
 
 public:
-    /*
-    MCCentralHub(const std::shared_ptr<SDEGeneral>& sdeInput, const std::shared_ptr<Pricer>& pxInput,
-        const std::shared_ptr<FDMType>& fdmInput, const std::shared_ptr<MTEngRandNumGen>& rgInput, int numSimulations, int numTime) : sde(sdeInput),
-        pricer(pxInput), fdm(fdmInput), randGen(rgInput) {
-        NumSim = numSimulations;
-        path = std::vector<double>(numTime + 1);
-    } */
-    //new constructor using tuple
-    MCCentralHub(const std::tuple<std::shared_ptr<SDEGeneral>, std::shared_ptr<Pricer>, std::shared_ptr<FDMType>,
-                std::shared_ptr<MTEngRandNumGen>>& pieces, int numSimulations, int numTime) : sde(std::get<0>(pieces)), 
-                pricer(std::get<1>(pieces)), fdm(std::get<2>(pieces)), randGen(std::get<3>(pieces)) {
-        NumSim = numSimulations;
-        path = std::vector<double>(numTime + 1);
+    MCCentralHub(const std::tuple<std::shared_ptr<SDEGeneral>, std::shared_ptr<Pricer>, 
+                 std::shared_ptr<FDMType>, std::shared_ptr<MTEngRandNumGen>>& pieces, 
+                 int numSimulations, int numTime) 
+        : sde(std::get<0>(pieces))
+        , pricer(std::get<1>(pieces))
+        , fdm(std::get<2>(pieces))
+        , randGen(std::get<3>(pieces))
+        , NumSim(numSimulations)
+        , PathSize(numTime + 1)
+        , path(PathSize)
+    {
+        std::cout << "Constructor: Checking pointers..." << std::endl;
+        if (!sde) throw std::runtime_error("SDE is null");
+        if (!pricer) throw std::runtime_error("Pricer is null");
+        if (!fdm) throw std::runtime_error("FDM is null");
+        if (!randGen) throw std::runtime_error("RandGen is null");
+        
+        std::cout << "Constructor: Parameters validated" << std::endl;
+        std::cout << "NumSim: " << NumSim << ", PathSize: " << PathSize << std::endl;
     }
 
     void BeginSimulation() {
-        double VOld{ 0.0 };
-        double VNew{ 0.0 };
-
-        for (int i = 1; i < NumSim; i++) {
-            VOld = sde->data->S_0; //set VOld to initial price, S_0
-            path[0] = VOld;
-
-            //if ((i%10000) == 0) {
-            //    std::cout << "i is at: " << i << "th iteration." << std::endl;
-           //}
-
-            for (int j = 1; j < path.size(); j++) {// I move fwd to j+1 and solve for VNew
-                //double x_n, double t_n, double dt, double normVar, double normVar2
-                VNew = fdm->next_n(VOld, fdm->x[j - 1], fdm->m, randGen->GenerateRandNum(), randGen->GenerateRandNum());
-                path[j] = VNew;
-                VOld = VNew;
+        try {
+            std::cout << "BeginSimulation: Starting..." << std::endl;
+            
+            if (!sde || !sde->data) {
+                throw std::runtime_error("SDE or SDE data is null");
             }
-            pricer->GeneratePath(path);
+            
+            const double S_0 = sde->data->S_0;
+            std::cout << "Initial price (S_0): " << S_0 << std::endl;
+            
+            const double dt = fdm->getTimeStep();
+            std::cout << "Time step (dt): " << dt << std::endl;
+
+            const auto& timePoints = fdm->getTimePoints();
+            std::cout << "First few time points: ";
+            for (int i = 0; i < std::min(5, static_cast<int>(timePoints.size())); ++i) {
+                std::cout << timePoints[i] << " ";
+            }
+            std::cout << std::endl;
+
+            for (int i = 0; i < NumSim; ++i) {
+                if (i % 25000 == 0) {
+                    std::cout << "Processing simulation " << i << std::endl;
+                }
+                
+                path[0] = S_0;
+                double VOld = S_0;
+                
+                for (int j = 1; j < PathSize; ++j) {
+                    const double t = fdm->getTimePoint(j - 1);
+                    const double normVar = randGen->GenerateRandNum();
+                    const double normVar2 = randGen->GenerateRandNum();
+                    
+                    const double VNew = fdm->next_n(VOld, t, dt, normVar, normVar2);
+                    path[j] = VNew;
+                    VOld = VNew;
+                }
+                
+                pricer->GeneratePath(path);
+            }
+            
+            std::cout << "All simulations completed" << std::endl;
             pricer->AfterPathCleanUp();
+            std::cout << "Cleanup completed" << std::endl;
+            
+        }
+        catch (const std::exception& e) {
+            std::cerr << "Exception in BeginSimulation: " << e.what() << std::endl;
+            throw;
+        }
+        catch (...) {
+            std::cerr << "Unknown exception in BeginSimulation" << std::endl;
+            throw;
         }
     }
 };

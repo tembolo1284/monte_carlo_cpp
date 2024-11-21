@@ -1,26 +1,28 @@
 #ifndef FDMType_HPP
 #define FDMType_HPP
-#include <functional>
+
 #include <vector>
 #include <memory>
-//#include "SDEAbstract.hpp"
-//#include "SDEGBM.hpp"
 #include "SDEGeneral.hpp"
-//template <SDEAbstract>
-class FDMType {
 
-public:
-    //abstract class.
+class FDMType {
+protected:
     std::shared_ptr<SDEGeneral> sde;
     int NT;
-    std::vector<double> x; //this will be the array for my space variable, my mesh
-    double m; //size of my space array
+    std::vector<double> x;
+    double m;
 
+public:
+    FDMType() = default;
+    virtual ~FDMType() = default;
+    
     virtual double next_n(double x_n, double t_n, double dt, double normVar, double normVar2) = 0;
+    
+    // Getters for accessing protected members
+    const std::vector<double>& getTimePoints() const { return x; }
+    double getTimeStep() const { return m; }
+    int getNumTimeSteps() const { return NT; }
+    double getTimePoint(size_t index) const { return x[index]; }
 };
-
-//#ifndef FDMType_cpp // Must be the same name as in source file #define
-//#include "FDMType.cpp"
-//#endif
 
 #endif

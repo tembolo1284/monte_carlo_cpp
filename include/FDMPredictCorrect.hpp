@@ -1,64 +1,90 @@
 #ifndef FDMPredictCorrect_HPP
 #define FDMPredictCorrect_HPP
+
 #include <functional>
 #include <vector>
-//#include "SDEAbstract.hpp"
+#include <iostream>
+#include <stdexcept>
+#include <algorithm>
 #include "SDEGeneral.hpp"
 #include "FDMType.hpp"
 
-//template <SDEAbstract>
 class FDMPredictCorrect : public FDMType {
-
-public:
-
-    //std::shared_ptr<SDEGeneral> sde;
-    //int NT;
-    //std::vector<double> x; //this will be the array for my space variable, my mesh
-    //double m; //size of my space array
-
-    double dtSqrt;
-    double A; //alpha
-    double B; //beta
-
-    //FDMEuler() {}
-    FDMPredictCorrect(std::shared_ptr<SDEGeneral>& stochEqn, int numTimeSteps, double alpha = 0.5, double beta = 0.5) {
-        sde = stochEqn;
-        NT = numTimeSteps;
-        A = alpha;
-        B = beta;
-        m = sde->data->T / static_cast<double>(NT);
-        dtSqrt = sqrt(m);
-        x = std::vector<double>(NT + 1);
-        x[0] = 0.0;
-
-        for (int i = 1; i < x.size(); i++) {
-            x[i] = x[i - 1] + m;
+private:
+    void validateConstruction(int numTimeSteps, double alpha, double beta) {
+        if (numTimeSteps <= 0) {
+            throw std::runtime_error("Number of time steps must be positive");
+        }
+        if (!sde) {
+            throw std::runtime_error("SDE pointer is null");
+        }
+        if (!sde->data) {
+            throw std::runtime_error("SDE data pointer is null");
+        }
+        if (sde->data->T <= 0) {
+            throw std::runtime_error("Time period T must be positive");
         }
     }
 
-    double next_n(double x_n, double t_n, double dt, double normVar, double normVar2) override {
-        //debug stuff
-        //std::cout << "x_n: " << x_n;
-        //std::cout << "drift: " << sde->drift(t_n, x_n) << std::endl;
-        //std::cout << "diffusion: " << sde->diffusion(t_n, x_n) << std::endl;
-        double adjustedDriftTerm{ 0.0 };
-        double diffusionTerm{ 0.0 };
-        //the usual euler part with standard drift and diffusion terms
-        double eulerUsual = x_n + (sde->drift(t_n, x_n) * dt) + (sde->diffusion(t_n, x_n) * normVar * sqrt(dt));
-        //return (x_n + (sde->drift(t_n, x_n) * dt) + (sde->diffusion(t_n, x_n) * normVar * sqrt(dt))); //old value for SDEGBM
+public:
+    double dtSqrt;
+    double A; // alpha
+    double B; // beta
+
+    FDMPredictCorrect(std::shared_ptr<SDEGeneral>& stochEqn, int numTimeSteps, double alpha = 0.5, double beta = 0.5) {
+        std::cout << "FDMPredictCorrect constructor start" << std::endl;
         
-        //drift and diffusion correction pieces
-        adjustedDriftTerm = (A * sde->driftCorrected(t_n + dt, eulerUsual, B) + (1.0 - A) * sde->driftCorrected(t_n, x_n, B))* dt;
-        //std::cout << "adjDrift: " << sde->driftCorrected(t_n, x_n, B) << std::endl;
-        diffusionTerm = (B * sde->diffusion(t_n + dt, eulerUsual) + (1.0 - B) * sde->diffusion(t_n, x_n)) * normVar * sqrt(dt);
-        //std::cout << "adjDiffusion: " << sde->diffusion(t_n, x_n) << std::endl;
-        return x_n + adjustedDriftTerm + diffusionTerm;
+        // Initialize base class members
+        this->sde = stochEqn;
+        this->NT = numTimeSteps;
+        A = alpha;
+        B = beta;
+        
+        validateConstruction(numTimeSteps, alpha, beta);
+        
+        this->m = sde->data->T / static_cast<double>(numTimeSteps);
+        std::cout << "Time step m calculated: " << this->m << std::endl;
+        
+        dtSqrt = std::sqrt(this->m);
+        this->x.resize(numTimeSteps + 1);
+        
+        std::cout << "Initializing time points array of size: " << this->x.size() << std::endl;
+        this->x[0] = 0.0;
+        for (int i = 1; i < this->x.size(); i++) {
+            this->x[i] = this->x[i - 1] + this->m;
+        }
+        
+        // Validate initialization
+        std::cout << "Time points initialized. First few points: ";
+        for (int i = 0; i < std::min(5, static_cast<int>(this->x.size())); ++i) {
+            std::cout << this->x[i] << " ";
+        }
+        std::cout << std::endl;
+        
+        std::cout << "FDMPredictCorrect constructor complete" << std::endl;
     }
 
+    double next_n(double x_n, double t_n, double dt, double normVar, double normVar2) override {
+        if (!sde) {
+            throw std::runtime_error("SDE is null in next_n");
+        }
+        
+        double adjustedDriftTerm = 0.0;
+        double diffusionTerm = 0.0;
+        
+        // Calculate intermediate Euler step
+        double eulerUsual = x_n + (sde->drift(t_n, x_n) * dt) + 
+                           (sde->diffusion(t_n, x_n) * normVar * std::sqrt(dt));
+        
+        // Calculate corrections
+        adjustedDriftTerm = (A * sde->driftCorrected(t_n + dt, eulerUsual, B) + 
+                           (1.0 - A) * sde->driftCorrected(t_n, x_n, B)) * dt;
+        
+        diffusionTerm = (B * sde->diffusion(t_n + dt, eulerUsual) + 
+                       (1.0 - B) * sde->diffusion(t_n, x_n)) * normVar * std::sqrt(dt);
+        
+        return x_n + adjustedDriftTerm + diffusionTerm;
+    }
 };
-
-//#ifndef FDMPredictCorrect_cpp // Must be the same name as in source file #define
-//#include "FDMPredictCorrect.cpp"
-//#endif
 
 #endif
