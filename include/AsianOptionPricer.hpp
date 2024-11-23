@@ -1,4 +1,3 @@
-// AsianOptionPricer.hpp
 #ifndef AsianOptionPricer_HPP
 #define AsianOptionPricer_HPP
 
@@ -14,8 +13,8 @@ public:
     {}
 
     void GeneratePath(const std::vector<double>& vec) override {
-        const double sum = std::accumulate(vec.begin(), vec.end() - 1, 0.0);
-        const double avg = sum / (vec.size() - 1);
+        const double pathSum = std::accumulate(vec.begin(), vec.end() - 1, 0.0);
+        const double avg = pathSum / static_cast<double>(vec.size() - 1);
         const double payoff = m_payoffFunction(avg);
         updateStats(payoff);
     }

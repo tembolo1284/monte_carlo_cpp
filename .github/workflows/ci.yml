@@ -7,71 +7,85 @@ on:
     branches: [ main ]
 
 jobs:
-  build:
+  build-and-test:
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        compiler: [gcc, clang]
+        build_type: [Release, Debug]
 
     steps:
     - uses: actions/checkout@v3
-
+    
     - name: Install dependencies
       run: |
         sudo apt-get update
-        sudo apt-get install -y cmake ninja-build libomp-dev
-
+        sudo apt-get install -y cmake ninja-build libomp-dev lcov
+        
     - name: Configure CMake
-      run: cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
-
+      run: |
+        cmake -B build -G Ninja \
+          -DCMAKE_BUILD_TYPE=${{matrix.build_type}} \
+          -DUSE_CLANG=${{matrix.compiler == 'clang'}} \
+          -DENABLE_COVERAGE=ON \
+          -DCMAKE_CXX_FLAGS="--coverage"
+          
     - name: Build
       run: cmake --build build
-
+      
     - name: Test
       working-directory: build
-      run: ctest --output-on-failure
+      run: |
+        ctest --output-on-failure
+        
+    - name: Generate coverage report
+      if: matrix.build_type == 'Debug' && matrix.compiler == 'gcc'
+      run: |
+        lcov --capture --directory build --output-file coverage.info
+        lcov --remove coverage.info '/usr/*' --output-file coverage.info
+        lcov --list coverage.info
+        
+    - name: Upload coverage report
+      if: matrix.build_type == 'Debug' && matrix.compiler == 'gcc'
+      uses: codecov/codecov-action@v3
+      with:
+        files: ./coverage.info
+        fail_ci_if_error: true
 
-  static-analysis:
+  code-quality:
     runs-on: ubuntu-latest
-    
     steps:
     - uses: actions/checkout@v3
     
-    - name: Install dependencies
+    - name: Install analysis tools
       run: |
         sudo apt-get update
         sudo apt-get install -y clang-tidy cppcheck
         
-    - name: Run clang-tidy
-      run: |
-        find . -name '*.cpp' -o -name '*.hpp' | xargs clang-tidy -p build
-        
-    - name: Run cppcheck
+    - name: Static analysis
       run: |
         cppcheck --enable=all --error-exitcode=1 .
+        find . -name '*.cpp' -o -name '*.hpp' | xargs clang-tidy -p build --
 
-  code-coverage:
+  sanitize:
     runs-on: ubuntu-latest
-    
     steps:
     - uses: actions/checkout@v3
     
     - name: Install dependencies
       run: |
         sudo apt-get update
-        sudo apt-get install -y lcov
+        sudo apt-get install -y cmake ninja-build libomp-dev
         
-    - name: Configure CMake with coverage
-      run: cmake -B build -DCMAKE_BUILD_TYPE=Debug -DENABLE_COVERAGE=ON
-      
+    - name: Configure CMake with sanitizers
+      run: |
+        cmake -B build -G Ninja \
+          -DCMAKE_BUILD_TYPE=Debug \
+          -DCMAKE_CXX_FLAGS="-fsanitize=address,undefined -fno-omit-frame-pointer"
+          
     - name: Build
       run: cmake --build build
       
-    - name: Run tests with coverage
-      run: |
-        cd build
-        ctest
-        lcov --capture --directory . --output-file coverage.info
-        lcov --remove coverage.info '/usr/*' --output-file coverage.info
-        
-    - name: Upload coverage report
-      uses: codecov/codecov-action@v3
-      with:
-        files: ./build/coverage.info
+    - name: Test with sanitizers
+      working-directory: build
+      run: ctest --output-on-failure

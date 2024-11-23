@@ -35,19 +35,19 @@ protected:
         };
         
         driftCorrected = []([[maybe_unused]] double t, double S) { 
-            return 0.05 * S - 0.5 * 0.2 * S * 0.2;  // r*S - 0.5*sigma^2*S
+            return 0.05 * S - 0.5 * 0.2 * S * 0.2;  // rS - 0.5σ²S
         };
-        
-        sdeParams = std::make_tuple(drift, diffusion, driftCorrected, diffusionDerivative);
+
+        auto sdeParams = std::make_tuple(drift, diffusion, driftCorrected, diffusionDerivative);
         sde = std::make_shared<SDEGeneral>(sdeParams, optionData);
     }
 
     void ValidateNumericalSolution(const std::vector<double>& path, 
                                  double S0, 
                                  [[maybe_unused]] double dt, 
-                                 double tolerance) {
+                                 double tol) {  // Changed from 'tolerance' to avoid shadowing
         ASSERT_GT(path.size(), 0) << "Path should not be empty";
-        EXPECT_NEAR(path[0], S0, tolerance) << "Initial value should be S0";
+        EXPECT_NEAR(path[0], S0, tol) << "Initial value should be S0";
         
         // Check that values remain positive (property of geometric Brownian motion)
         for (const auto& value : path) {
@@ -71,13 +71,12 @@ protected:
     InputFunction diffusion;
     InputFunction diffusionDerivative;
     InputFunction driftCorrected;
-    std::tuple<InputFunction, InputFunction, InputFunction, InputFunction> sdeParams;
     std::shared_ptr<SDEGeneral> sde;
     const double tolerance = 1e-10;
 };
 
 TEST_F(FDMTest, EulerConstructor) {
-    int NT = 100;
+    const int NT = 100;
     auto fdm = std::make_shared<FDMEuler>(sde, NT);
     
     EXPECT_EQ(fdm->getTimePoints().size(), static_cast<size_t>(NT) + 1);
@@ -87,9 +86,9 @@ TEST_F(FDMTest, EulerConstructor) {
 }
 
 TEST_F(FDMTest, PredictCorrectConstructor) {
-    int NT = 100;
-    double alpha = 0.5;
-    double beta = 0.5;
+    const int NT = 100;
+    const double alpha = 0.5;
+    const double beta = 0.5;
     auto fdm = std::make_shared<FDMPredictCorrect>(sde, NT, alpha, beta);
     
     EXPECT_EQ(fdm->getTimePoints().size(), static_cast<size_t>(NT) + 1);
@@ -99,7 +98,7 @@ TEST_F(FDMTest, PredictCorrectConstructor) {
 }
 
 TEST_F(FDMTest, TimeStepConsistency) {
-    int NT = 100;
+    const int NT = 100;
     auto fdm = std::make_shared<FDMEuler>(sde, NT);
     const auto& timePoints = fdm->getTimePoints();
     
@@ -110,15 +109,42 @@ TEST_F(FDMTest, TimeStepConsistency) {
 }
 
 TEST_F(FDMTest, BoundaryConditions) {
-    int NT = 100;
+    const int NT = 100;
     auto fdm = std::make_shared<FDMEuler>(sde, NT);
-    double S0 = 100.0;
-    double dt = fdm->getTimeStep();
-    double normVar = 0.0;  // Use zero for deterministic test
-    double normVar2 = 0.0;
+    const double S0 = 100.0;
+    const double dt = fdm->getTimeStep();
+    const double normVar = 0.0;  // Use zero for deterministic test
+    const double normVar2 = 0.0;
     
     // With zero random input, should follow deterministic path
-    double nextValue = fdm->next_n(S0, 0.0, dt, normVar, normVar2);
-    double expected = S0 * (1 + optionData.r * dt);
+    const double nextValue = fdm->next_n(S0, 0.0, dt, normVar, normVar2);
+    const double expected = S0 * (1 + optionData.r * dt);
+    EXPECT_NEAR(nextValue, expected, tolerance);
+}
+
+TEST_F(FDMTest, ZeroVolatilityCase) {
+    // Create new option data with zero volatility
+    auto zeroVolOption = optionData;
+    zeroVolOption.sig = 0.0;
+    
+    // Create functions with zero volatility
+    auto zeroDiffusion = []([[maybe_unused]] double t, [[maybe_unused]] double S) { 
+        return 0.0; 
+    };
+    auto zeroDiffDeriv = []([[maybe_unused]] double t, [[maybe_unused]] double S) { 
+        return 0.0; 
+    };
+    
+    auto sdeParams = std::make_tuple(drift, zeroDiffusion, driftCorrected, zeroDiffDeriv);
+    auto zeroVolSde = std::make_shared<SDEGeneral>(sdeParams, zeroVolOption);
+    
+    const int NT = 100;
+    auto fdm = std::make_shared<FDMEuler>(zeroVolSde, NT);
+    const double S0 = 100.0;
+    const double dt = fdm->getTimeStep();
+    
+    // With zero volatility, solution should be purely deterministic
+    const double nextValue = fdm->next_n(S0, 0.0, dt, 0.0, 0.0);
+    const double expected = S0 * (1 + optionData.r * dt);
     EXPECT_NEAR(nextValue, expected, tolerance);
 }
