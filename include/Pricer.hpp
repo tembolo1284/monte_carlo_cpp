@@ -5,7 +5,7 @@
 #include <vector>
 #include <tuple>
 #include <mutex>
-
+#include <cmath>
 class Pricer {
 protected:
     std::mutex mtx;

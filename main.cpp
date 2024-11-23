@@ -19,18 +19,38 @@
 int main() {
     std::cout << "1 factor MC with explicit Euler or Predictor-Corrector method\n";
     
-    // Option parameters
-    OptionData myOption{ 65.0, 0.25, 0.08, 0.3, 0.0, 60 };
+    // Option parameters with all fields initialized
+    OptionData myOption{
+        .K = 65.0,        // Strike price
+        .T = 0.25,        // Time to maturity
+        .r = 0.08,        // Risk-free rate
+        .sig = 0.3,       // Volatility
+        .D = 0.0,         // Dividend rate
+        .S_0 = 60.0,      // Initial stock price
+        .type = 1,        // Call option (1 for call, -1 for put)
+        .H = 0.0,         // No barrier
+        .betaCEV = 1.0,   // Standard CEV parameter
+        .scale = 1.0      // Standard scale
+    };
     
     // Simulation parameters
     const int NT = 1000;
     const int NSIM = 50000;
 
-    // SDE functions
-    const auto drift = [=](double t, double S) { return (myOption.r - myOption.D) * S; };
-    const auto diffusion = [=](double t, double S) { return myOption.sig * S; };
-    const auto diffusionDerivative = [=](double t, double S) { return myOption.sig; };
-    const auto driftCorrected = [=](double t, double S) { 
+    // SDE functions with [[maybe_unused]] to silence warnings
+    const auto drift = [=]([[maybe_unused]] double t, double S) { 
+        return (myOption.r - myOption.D) * S; 
+    };
+    
+    const auto diffusion = [=]([[maybe_unused]] double t, double S) { 
+        return myOption.sig * S; 
+    };
+    
+    const auto diffusionDerivative = [=]([[maybe_unused]] double t, [[maybe_unused]] double S) { 
+        return myOption.sig; 
+    };
+    
+    const auto driftCorrected = [=]([[maybe_unused]] double t, double S) { 
         return drift(t, S) - 0.5 * diffusion(t, S) * diffusionDerivative(t, S); 
     };
 
@@ -79,7 +99,7 @@ int main() {
               << "Std Error: " << std::get<1>(pricerEuroPut->StandardDeviationStats()) << "\n\n";
     
     sw.StopStopWatch();
-    std::cout << "Elapsed time in seconds: " << sw.GetTime() << '\n';
+    std::cout << "Elapsed time in seconds: " << sw.GetTime() << "\n\n";
 
     // European Call
     sw.Reset();
@@ -94,7 +114,7 @@ int main() {
               << "Std Error: " << std::get<1>(pricerEuroCall->StandardDeviationStats()) << "\n\n";
     
     sw.StopStopWatch();
-    std::cout << "Elapsed time in seconds: " << sw.GetTime() << '\n';
+    std::cout << "Elapsed time in seconds: " << sw.GetTime() << "\n\n";
 
     // Asian Put
     sw.Reset();
@@ -109,7 +129,7 @@ int main() {
               << "Std Error: " << std::get<1>(pricerAsianPut->StandardDeviationStats()) << "\n\n";
     
     sw.StopStopWatch();
-    std::cout << "Elapsed time in seconds: " << sw.GetTime() << '\n';
+    std::cout << "Elapsed time in seconds: " << sw.GetTime() << "\n\n";
 
     // Asian Call
     sw.Reset();
@@ -124,7 +144,7 @@ int main() {
               << "Std Error: " << std::get<1>(pricerAsianCall->StandardDeviationStats()) << "\n\n";
     
     sw.StopStopWatch();
-    std::cout << "Elapsed time in seconds: " << sw.GetTime() << '\n';
+    std::cout << "Elapsed time in seconds: " << sw.GetTime() << "\n\n";
 
     return 0;
 }

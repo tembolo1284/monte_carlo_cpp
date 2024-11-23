@@ -64,7 +64,7 @@ public:
             std::cout << std::endl;
 
             for (int i = 0; i < NumSim; ++i) {
-                if (i % 25000 == 0) {
+                if (i % 10000 == 0) {
                     std::cout << "Processing simulation " << i << std::endl;
                 }
                 

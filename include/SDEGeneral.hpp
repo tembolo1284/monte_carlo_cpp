@@ -41,8 +41,11 @@ public:
     }
 
     __attribute__((always_inline)) inline
-    double driftCorrected(double t, double x, double B) const noexcept {
-        return drift(t, x) - B * diffusion(t, x) * diffusionDerivative(t, x);
+    double driftCorrected(double t, double x, [[maybe_unused]] double B) const noexcept {
+        // For GBM: muS - 0.5sig^2S = m_drift - 0.5 * m_diffusion * m_diffusionDerivative
+        double sigma = m_diffusion(t, x) / x;  // Convert to volatility
+        double mu = m_drift(t, x) / x;         // Convert to drift rate
+        return x * (mu - 0.5 * sigma * sigma); // Return drift-corrected term
     }
 };
 
